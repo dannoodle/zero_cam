@@ -161,8 +161,17 @@ def main():
     logger.info("Starting Raspberry Pi Zero Camera System")
     
     try:
+        # Log actual paths being used
+        logger.info(f"BASE_DIR: {BASE_DIR}")
+        logger.info(f"IMAGES_DIR: {IMAGES_DIR}")
+        logger.info(f"TEMP_DIR: {TEMP_DIR}")
+        logger.info(f"CURRENT_DIR: {CURRENT_DIR}")
+        logger.info(f"ARCHIVE_DIR: {ARCHIVE_DIR}")
+        logger.info(f"LOGS_DIR: {LOGS_DIR}")
+        
         # Ensure all directories exist
         for directory in [CURRENT_DIR, TEMP_DIR, ARCHIVE_DIR, LOGS_DIR]:
+            logger.info(f"Ensuring directory exists: {directory}")
             os.makedirs(directory, exist_ok=True)
             
         # Register signal handlers for graceful shutdown
@@ -212,11 +221,15 @@ def main():
                 if camera.should_sync() or image_path is None:
                     # Check network before attempting sync
                     if check_network_status():
+                        logger.info("Starting sync process...")
                         # Sync temp directory to Dropbox and move files to archive
-                        if sync.sync_temp_and_move():
+                        sync_success = sync.sync_temp_and_move()
+                        
+                        if sync_success:
+                            logger.info("Sync and file move successful, resetting capture count")
                             camera.reset_capture_count()
                         else:
-                            logger.warning("Sync or move failed, not resetting capture count")
+                            logger.warning("Sync or move operation failed, not resetting capture count")
                         
                         # Also sync logs if configured
                         if config['sync'].get('sync_logs', True):
