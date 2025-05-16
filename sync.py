@@ -7,7 +7,7 @@ Handles file transfer between local system and Dropbox using rclone.
 import os
 import subprocess
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -82,20 +82,21 @@ class DropboxSync:
     
     def _get_remote_path(self, local_path):
         """Generate the appropriate remote path for a local directory."""
-        if local_path.startswith(self.current_dir):
-            # For current images, preserve directory structure
-            rel_path = os.path.relpath(local_path, os.path.dirname(self.current_dir))
-            return f"{self.remote_name}:{self.remote_path}/{rel_path}"
+        # For dated directories within current
+        if os.path.dirname(local_path) == self.current_dir:
+            # Just use the date folder name directly
+            folder_name = os.path.basename(local_path)
+            return f"{self.remote_name}:{self.remote_path}/{folder_name}"
         
-        elif local_path.startswith(self.logs_dir) and self.sync_logs:
-            # For logs, use a logs subfolder
-            rel_path = os.path.relpath(local_path, os.path.dirname(self.logs_dir))
-            return f"{self.remote_name}:{self.remote_path}/{rel_path}"
+        # For logs directory
+        elif local_path == self.logs_dir and self.sync_logs:
+            return f"{self.remote_name}:{self.remote_path}/logs"
         
+        # For any other directory (fallback)
         else:
-            # For anything else, use the base remote path + basename
-            rel_path = os.path.basename(local_path)
-            return f"{self.remote_name}:{self.remote_path}/{rel_path}"
+            # Extract just the basename as the target directory
+            folder_name = os.path.basename(local_path)
+            return f"{self.remote_name}:{self.remote_path}/{folder_name}"
     
     def sync_directory(self, local_dir):
         """Transfer a local directory to Dropbox using the configured operation mode."""
@@ -162,14 +163,76 @@ class DropboxSync:
             return False
     
     def sync_all_current(self):
-        """Transfer all current images to Dropbox."""
-        result = self.sync_directory(self.current_dir)
+        """Transfer all dated directories from current images to Dropbox."""
+        success = True
+        sync_count = 0
         
-        # Also sync logs if configured
-        if result and self.sync_logs:
-            self.sync_logs_directory()
+        # Get all items in the current directory
+        try:
+            for item in os.listdir(self.current_dir):
+                item_path = os.path.join(self.current_dir, item)
+                
+                # Only sync directories that match date format (YYYY-MM-DD)
+                if os.path.isdir(item_path) and self._is_date_format(item):
+                    logger.info(f"Syncing dated directory: {item}")
+                    if not self.sync_directory(item_path):
+                        success = False
+                    else:
+                        sync_count += 1
+                        
+            logger.info(f"Synced {sync_count} dated directories")
             
-        return result
+            # Also sync logs if configured
+            if success and self.sync_logs:
+                self.sync_logs_directory()
+                
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error syncing dated directories: {str(e)}")
+            return False
+    
+    def _is_date_format(self, dirname):
+        """Check if a directory name follows the YYYY-MM-DD format."""
+        try:
+            datetime.strptime(dirname, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+    
+    def sync_recent_directories(self, days=7):
+        """Sync recent dated directories (last N days)."""
+        success = True
+        sync_count = 0
+        
+        try:
+            # Get cutoff date
+            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+            
+            # Get all items in the current directory
+            for item in os.listdir(self.current_dir):
+                item_path = os.path.join(self.current_dir, item)
+                
+                # Only sync directories that match date format and are recent
+                if os.path.isdir(item_path) and self._is_date_format(item) and item >= cutoff_str:
+                    logger.info(f"Syncing recent directory: {item}")
+                    if not self.sync_directory(item_path):
+                        success = False
+                    else:
+                        sync_count += 1
+                        
+            logger.info(f"Synced {sync_count} recent directories")
+            
+            # Also sync logs if configured
+            if success and self.sync_logs:
+                self.sync_logs_directory()
+                
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error syncing recent directories: {str(e)}")
+            return False
     
     def sync_logs_directory(self):
         """Transfer log files to Dropbox if enabled."""
