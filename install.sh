@@ -109,4 +109,78 @@ fi
 # Make main.py executable
 chmod +x "$PROJECT_DIR/main.py"
 
-# Rest of the script remains the same...
+# Configure rclone if not already set up
+if ! rclone listremotes | grep -q "dropbox:"; then
+    echo "rclone not configured for Dropbox. Please run 'rclone config' to set it up."
+    echo "Instructions: https://rclone.org/dropbox/"
+    
+    read -p "Would you like to configure rclone now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Running rclone config..."
+        echo "Please follow the prompts to set up a new remote named 'dropbox'"
+        rclone config
+    fi
+fi
+
+# Set correct permissions
+echo "Setting permissions..."
+chown -R $ACTUAL_USER:$ACTUAL_USER "$PROJECT_DIR"
+
+# Install systemd service
+echo "Installing systemd service..."
+cat > /etc/systemd/system/zero-cam.service << EOF
+[Unit]
+Description=Raspberry Pi Zero Camera System
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 $PROJECT_DIR/main.py
+WorkingDirectory=$PROJECT_DIR
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=$ACTUAL_USER
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd
+systemctl daemon-reload
+
+# Ask to enable service
+read -p "Enable zero-cam service to start at boot? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    systemctl enable zero-cam.service
+    echo "Service enabled to start at boot"
+else
+    echo "Service not enabled to start at boot"
+fi
+
+# Ask to start service now
+read -p "Start zero-cam service now? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    systemctl start zero-cam.service
+    echo "Service started"
+    echo "You can check the status with: sudo systemctl status zero-cam"
+else
+    echo "Service not started"
+fi
+
+echo "Installation complete!"
+echo ""
+echo "To manage the service:"
+echo "- Start: sudo systemctl start zero-cam"
+echo "- Stop: sudo systemctl stop zero-cam"
+echo "- Restart: sudo systemctl restart zero-cam"
+echo "- Status: sudo systemctl status zero-cam"
+echo "- View logs: sudo journalctl -u zero-cam -f"
+echo ""
+echo "Configuration file: $PROJECT_DIR/config.json"
+echo "Log directory: $PROJECT_DIR/logs"
+echo "Images directory structure:"
+echo "- $PROJECT_DIR/images/temp (temporary storage before sync)"
+echo "- $PROJECT_DIR/images/archive (dated storage of synced images)"
