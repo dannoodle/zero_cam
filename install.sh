@@ -14,6 +14,23 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Determine the actual user (who ran sudo)
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    # If not run with sudo, try to guess the user
+    # This could be the first non-root user on the system
+    ACTUAL_USER=$(getent passwd 1000 | cut -d: -f1)
+    
+    # If we couldn't find a user with UID 1000, use current $USER 
+    # or fallback to a default
+    if [ -z "$ACTUAL_USER" ]; then
+        ACTUAL_USER=${USER:-"pi"}
+    fi
+fi
+
+echo "Installing for user: $ACTUAL_USER"
+
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_DIR="/opt/pi_cam"
@@ -99,7 +116,7 @@ fi
 
 # Set correct permissions
 echo "Setting permissions..."
-chown -R pi:pi "$PROJECT_DIR"
+chown -R $ACTUAL_USER:$ACTUAL_USER "$PROJECT_DIR"
 
 # Install systemd service
 echo "Installing systemd service..."
@@ -114,7 +131,7 @@ WorkingDirectory=$PROJECT_DIR
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=pi
+User=$ACTUAL_USER
 
 [Install]
 WantedBy=multi-user.target
