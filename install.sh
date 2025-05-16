@@ -49,10 +49,11 @@ pip3 install --break-system-packages psutil python-dotenv
 echo "Creating project directory..."
 mkdir -p $PROJECT_DIR
 
-# Copy project files
-echo "Copying project files..."
+# Create directory structure
+echo "Creating directory structure..."
 mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/images/current"
+mkdir -p "$PROJECT_DIR/images/temp"  # New temp directory
 mkdir -p "$PROJECT_DIR/images/archive"
 
 # Copy Python files
@@ -82,7 +83,6 @@ else
   "sync": {
     "remote_name": "dropbox",
     "remote_path": "pi_cam",
-    "operation_mode": "copy",
     "sync_logs": true,
     "sync_on_shutdown": true
   },
@@ -172,4 +172,7 @@ echo "- View logs: sudo journalctl -u pi_cam -f"
 echo ""
 echo "Configuration file: $PROJECT_DIR/config.json"
 echo "Log directory: $PROJECT_DIR/logs"
-echo "Images directory: $PROJECT_DIR/images"
+echo "Images directory structure:"
+echo "- $PROJECT_DIR/images/temp (temporary storage before sync)"
+echo "- $PROJECT_DIR/images/current (daily sorted storage)"
+echo "- $PROJECT_DIR/images/archive (older archives)"

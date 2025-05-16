@@ -28,6 +28,7 @@ running = True
 BASE_DIR = Path(__file__).parent
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
 CURRENT_DIR = os.path.join(IMAGES_DIR, "current")
+TEMP_DIR = os.path.join(IMAGES_DIR, "temp")  # New temp directory
 ARCHIVE_DIR = os.path.join(IMAGES_DIR, "archive")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 
@@ -55,7 +56,7 @@ def setup_logging(log_level="INFO"):
         )
         
         logger = logging.getLogger(__name__)
-        logger.info(f"Logging initialized at level {log_level}")
+        logger.info(f"Logging initialised at level {log_level}")
         logger.info(f"Log file: {log_file}")
         
         return logger
@@ -160,15 +161,19 @@ def main():
     logger.info("Starting Raspberry Pi Zero Camera System")
     
     try:
+        # Ensure all directories exist
+        for directory in [CURRENT_DIR, TEMP_DIR, ARCHIVE_DIR, LOGS_DIR]:
+            os.makedirs(directory, exist_ok=True)
+            
         # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         
         # Initialize components
-        logger.info("Initializing system components...")
+        logger.info("Initialising system components...")
         
-        camera = Camera(config, CURRENT_DIR)
-        sync = DropboxSync(config, CURRENT_DIR, LOGS_DIR)
+        camera = Camera(config, CURRENT_DIR, TEMP_DIR)
+        sync = DropboxSync(config, CURRENT_DIR, TEMP_DIR, LOGS_DIR)
         file_manager = FileManager(config, CURRENT_DIR, ARCHIVE_DIR, LOGS_DIR)
         
         # Check camera connection
@@ -207,7 +212,13 @@ def main():
                 if camera.should_sync() or image_path is None:
                     # Check network before attempting sync
                     if check_network_status():
-                        sync.sync_daily_directory()
+                        # Sync temp directory to Dropbox and move files to daily folder
+                        sync.sync_temp_and_move()
+                        
+                        # Also sync logs if configured
+                        if config['sync'].get('sync_logs', True):
+                            sync.sync_logs_directory()
+                            
                         camera.reset_capture_count()
                     else:
                         logger.warning("Network unavailable, skipping sync")
@@ -229,7 +240,10 @@ def main():
             logger.info("Performing final sync before shutdown")
             try:
                 if check_network_status():
-                    sync.sync_all_current()
+                    # Final sync of temp directory and logs
+                    sync.sync_temp_and_move()
+                    if config['sync'].get('sync_logs', True):
+                        sync.sync_logs_directory()
                 else:
                     logger.warning("Network unavailable, skipping final sync")
             except Exception as e:
