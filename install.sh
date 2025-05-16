@@ -33,7 +33,7 @@ echo "Installing for user: $ACTUAL_USER"
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_DIR="/opt/pi_cam"
+PROJECT_DIR="/home/noodle/zero_cam"
 echo "Installing to: $PROJECT_DIR"
 
 # Install required packages
@@ -82,7 +82,7 @@ else
   },
   "sync": {
     "remote_name": "dropbox",
-    "remote_path": "pi_cam",
+    "remote_path": "zero_cam",
     "sync_logs": true,
     "sync_on_shutdown": true
   },
@@ -120,7 +120,7 @@ chown -R $ACTUAL_USER:$ACTUAL_USER "$PROJECT_DIR"
 
 # Install systemd service
 echo "Installing systemd service..."
-cat > /etc/systemd/system/pi_cam.service << EOF
+cat > /etc/systemd/system/zero-cam.service << EOF
 [Unit]
 Description=Raspberry Pi Zero Camera System
 After=network.target
@@ -141,22 +141,22 @@ EOF
 systemctl daemon-reload
 
 # Ask to enable service
-read -p "Enable pi_cam service to start at boot? (y/n) " -n 1 -r
+read -p "Enable zero-cam service to start at boot? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    systemctl enable pi_cam.service
+    systemctl enable zero-cam.service
     echo "Service enabled to start at boot"
 else
     echo "Service not enabled to start at boot"
 fi
 
 # Ask to start service now
-read -p "Start pi_cam service now? (y/n) " -n 1 -r
+read -p "Start zero-cam service now? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    systemctl start pi_cam.service
+    systemctl start zero-cam.service
     echo "Service started"
-    echo "You can check the status with: sudo systemctl status pi_cam"
+    echo "You can check the status with: sudo systemctl status zero-cam"
 else
     echo "Service not started"
 fi
@@ -164,11 +164,11 @@ fi
 echo "Installation complete!"
 echo ""
 echo "To manage the service:"
-echo "- Start: sudo systemctl start pi_cam"
-echo "- Stop: sudo systemctl stop pi_cam"
-echo "- Restart: sudo systemctl restart pi_cam"
-echo "- Status: sudo systemctl status pi_cam"
-echo "- View logs: sudo journalctl -u pi_cam -f"
+echo "- Start: sudo systemctl start zero-cam"
+echo "- Stop: sudo systemctl stop zero-cam"
+echo "- Restart: sudo systemctl restart zero-cam"
+echo "- Status: sudo systemctl status zero-cam"
+echo "- View logs: sudo journalctl -u zero-cam -f"
 echo ""
 echo "Configuration file: $PROJECT_DIR/config.json"
 echo "Log directory: $PROJECT_DIR/logs"
