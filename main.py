@@ -180,7 +180,7 @@ def main():
         logger.info("Initialising system components...")
         
         camera = Camera(config, TEMP_DIR)
-        sync = DropboxSync(config, TEMP_DIR, LOGS_DIR)
+        sync = DropboxSync(config, TEMP_DIR, ARCHIVE_DIR, LOGS_DIR)
         file_manager = FileManager(config, ARCHIVE_DIR, LOGS_DIR)
         
         # Check camera connection
