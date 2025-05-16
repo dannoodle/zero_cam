@@ -271,27 +271,28 @@ class DropboxSync:
                     if to_delete_remotely:
                         logger.info(f"Deleting {len(to_delete_remotely)} files from remote that don't exist locally")
                         try:
-                            # Create a filter file listing files to delete
-                            filter_file = os.path.join(temp_dir, "delete_filter.txt")
-                            with open(filter_file, 'w') as f:
-                                for file in to_delete_remotely:
-                                    f.write(f"- {file}\n")
+                            # Delete files individually - compatible with all rclone versions
+                            deleted_count = 0
+                            for file in to_delete_remotely:
+                                remote_file = f"{remote_dir}/{file}"
+                                logger.debug(f"Deleting from remote: {remote_file}")
+                                
+                                result = subprocess.run(
+                                    ["rclone", "deletefile", remote_file],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=30
+                                )
+                                
+                                if result.returncode == 0:
+                                    deleted_count += 1
+                                else:
+                                    logger.error(f"Failed to delete {file} from remote: {result.stderr}")
                             
-                            # Use deletefiles command with filter file
-                            result = subprocess.run(
-                                ["rclone", "deletefiles", remote_dir, "--files-from", filter_file],
-                                capture_output=True,
-                                text=True,
-                                timeout=120
-                            )
-                            
-                            if result.returncode != 0:
-                                logger.error(f"Failed to delete remote files: {result.stderr}")
-                            else:
-                                logger.info(f"Successfully deleted files from remote")
+                            logger.info(f"Successfully deleted {deleted_count} files from remote")
                             
                         except Exception as e:
-                            logger.error(f"Error creating filter file for deletion: {str(e)}")
+                            logger.error(f"Error deleting remote files: {str(e)}")
                 
                 logger.info(f"Bidirectional sync completed: {len(need_to_upload)} uploaded, {len(need_to_download)} downloaded")
                 return True
