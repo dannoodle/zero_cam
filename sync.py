@@ -26,8 +26,16 @@ class DropboxSync:
         self.logs_dir = logs_dir
         
         # Directory for rclone bisync state files
-        self.state_dir = os.path.join(os.path.dirname(current_dir), "sync_state")
-        os.makedirs(self.state_dir, exist_ok=True)
+        parent_dir = os.path.dirname(os.path.dirname(current_dir))
+        self.state_dir = os.path.join(parent_dir, "sync_state")
+        try:
+            os.makedirs(self.state_dir, exist_ok=True)
+            # Set permissions to ensure write access
+            os.chmod(self.state_dir, 0o755)
+            logger.info(f"Sync state directory created at {self.state_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create sync state directory: {str(e)}")
+            self.bidirectional = False
         
         # Check if rclone is configured
         self._check_rclone_config()
@@ -70,23 +78,24 @@ class DropboxSync:
     def _check_rclone_bisync(self):
         """Check if rclone version supports bisync."""
         try:
+            # Run the help command for bisync specifically
             result = subprocess.run(
-                ["rclone", "version"],
+                ["rclone", "help", "bisync"],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
             
-            if "bisync" in result.stdout:
+            if result.returncode == 0:
                 logger.info("Rclone supports bidirectional sync")
                 return True
             else:
-                logger.warning("Rclone version may not support bidirectional sync. Falling back to one-way sync.")
+                logger.warning("Rclone version doesn't support bidirectional sync. Falling back to one-way sync.")
                 self.bidirectional = False
                 return False
                 
         except Exception as e:
-            logger.error(f"Error checking rclone version: {str(e)}")
+            logger.error(f"Error checking rclone bisync support: {str(e)}")
             self.bidirectional = False
             return False
     
@@ -175,15 +184,15 @@ class DropboxSync:
                 local_dir, 
                 remote_dir,
                 "--verbose",
-                "--filters-file", "/dev/null",  # Don't use any filters
-                "--state-path", state_file,
-                "--conflict-resolve", "newer",  # Choose newer files in case of conflict
+                "--state-path", state_file
             ]
             
             # Add resync flag for first run
             if first_run:
                 cmd.append("--resync")
                 logger.info("First sync, performing full resync")
+            
+            logger.debug(f"Running bisync command: {' '.join(cmd)}")
             
             # Run the bisync command
             result = subprocess.run(
@@ -193,15 +202,22 @@ class DropboxSync:
                 timeout=300  # 5 minute timeout
             )
             
+            # Log the full output for debugging
+            if result.stdout:
+                logger.debug(f"Bisync stdout: {result.stdout}")
+            if result.stderr:
+                logger.debug(f"Bisync stderr: {result.stderr}")
+            
             # Check for common bisync errors and handle them
             if result.returncode != 0:
-                logger.error(f"Bidirectional sync failed: {result.stderr}")
+                logger.error(f"Bidirectional sync failed with code {result.returncode}")
                 
                 # Handle common errors
                 if "bisync requires a --resync" in result.stderr:
                     logger.info("Will perform a full resync on next attempt")
                     if os.path.exists(state_file):
                         os.remove(state_file)
+                    return self._bisync_directory(local_dir, remote_dir, state_file)  # Try again with fresh state
                 elif "Failed to create state file" in result.stderr:
                     logger.info("State file error, will retry with resync")
                     if os.path.exists(state_file):
