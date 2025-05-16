@@ -212,14 +212,15 @@ def main():
                 if camera.should_sync() or image_path is None:
                     # Check network before attempting sync
                     if check_network_status():
-                        # Sync temp directory to Dropbox and move files to daily folder
-                        sync.sync_temp_and_move()
+                        # Sync temp directory to Dropbox and move files to archive
+                        if sync.sync_temp_and_move():
+                            camera.reset_capture_count()
+                        else:
+                            logger.warning("Sync or move failed, not resetting capture count")
                         
                         # Also sync logs if configured
                         if config['sync'].get('sync_logs', True):
                             sync.sync_logs_directory()
-                            
-                        camera.reset_capture_count()
                     else:
                         logger.warning("Network unavailable, skipping sync")
                 

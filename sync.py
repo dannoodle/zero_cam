@@ -80,8 +80,7 @@ class DropboxSync:
     
     def sync_temp_and_move(self):
         """
-        Sync only the temporary directory to Dropbox and 
-        then move files to the daily directory.
+        Sync temp directory to Dropbox and move files to archive.
         """
         try:
             # Skip if the temp directory is empty
@@ -89,14 +88,15 @@ class DropboxSync:
                 logger.info("No images in temp directory to sync")
                 return True
                 
-            # Sync the temp directory to Dropbox
-            remote_path = f"{self.remote_name}:{self.remote_path}/latest"
+            # Use configured remote path without adding "/latest"
+            remote_path = f"{self.remote_name}:{self.remote_path}"
             logger.info(f"Transferring new images from temp to {remote_path}")
             
-            # Use copy operation for the temp directory
+            # Use configured operation mode
+            operation_mode = self.config.get('operation_mode', 'copy')
             cmd = [
                 "rclone", 
-                "copy",
+                operation_mode,
                 self.temp_dir, 
                 remote_path,
                 "--progress"
@@ -116,25 +116,62 @@ class DropboxSync:
             
             logger.info(f"Transfer completed successfully: {self.temp_dir} → {remote_path}")
             
-            # Now move all files from temp to daily directory
-            today = datetime.now().strftime("%Y-%m-%d")
-            daily_dir = os.path.join(self.current_dir, today)
-            os.makedirs(daily_dir, exist_ok=True)
-            
-            move_count = 0
-            for filename in os.listdir(self.temp_dir):
-                src_file = os.path.join(self.temp_dir, filename)
-                dst_file = os.path.join(daily_dir, filename)
-                
-                if os.path.isfile(src_file):
-                    shutil.move(src_file, dst_file)
-                    move_count += 1
-            
-            logger.info(f"Moved {move_count} files from temp to daily directory")
-            return True
+            # Move files from temp directly to archive
+            archive_success = self.move_temp_to_archive()
+            return archive_success
             
         except Exception as e:
             logger.error(f"Error in sync_temp_and_move: {str(e)}")
+            return False
+            
+    def move_temp_to_archive(self):
+        """
+        Move files from temp directory directly to archive.
+        """
+        try:
+            # Skip if the temp directory is empty
+            if not os.path.exists(self.temp_dir) or not os.listdir(self.temp_dir):
+                logger.info("No images in temp directory to move")
+                return True
+                
+            # Use today's date for the archive folder
+            today = datetime.now().strftime("%Y-%m-%d")
+            archive_dir = os.path.join(os.path.dirname(self.current_dir), "archive", today)
+            os.makedirs(archive_dir, exist_ok=True)
+            
+            logger.info(f"Moving files from temp directory to archive: {archive_dir}")
+            
+            move_count = 0
+            move_errors = 0
+            for filename in os.listdir(self.temp_dir):
+                src_file = os.path.join(self.temp_dir, filename)
+                dst_file = os.path.join(archive_dir, filename)
+                
+                if os.path.isfile(src_file):
+                    try:
+                        # Handle existing files
+                        if os.path.exists(dst_file):
+                            file_base, file_ext = os.path.splitext(filename)
+                            dst_file = f"{archive_dir}/{file_base}_{int(time.time())}{file_ext}"
+                        
+                        shutil.move(src_file, dst_file)
+                        move_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to move {src_file} to {dst_file}: {str(e)}")
+                        move_errors += 1
+            
+            logger.info(f"Moved {move_count} files from temp to archive ({move_errors} errors)")
+            
+            # Check if all files were moved
+            remaining_files = len(os.listdir(self.temp_dir))
+            if remaining_files > 0:
+                logger.warning(f"{remaining_files} files still remain in temp directory")
+                return False
+                
+            return move_errors == 0
+            
+        except Exception as e:
+            logger.error(f"Error moving files to archive: {str(e)}")
             return False
     
     def sync_logs_directory(self):
