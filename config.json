@@ -1,0 +1,25 @@
+{
+  "camera": {
+    "interval": 20,
+    "captures": 3,
+    "hflip": false,
+    "vflip": false,
+    "rotation": 0,
+    "quality": 35,
+    "width": 2592,
+    "height": 1944
+  },
+  "sync": {
+    "remote_name": "dropbox",
+    "remote_path": "pi_cam",
+    "sync_logs": true,
+    "sync_on_shutdown": true
+  },
+  "file_management": {
+    "days_before_archive": 2,
+    "archive_retention_days": 10,
+    "log_retention_days": 7,
+    "min_free_space_mb": 500
+  },
+  "log_level": "INFO"
+}
