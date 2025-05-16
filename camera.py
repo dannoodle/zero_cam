@@ -37,7 +37,7 @@ class Camera:
         """Capture a single image using rpicam-still."""
         try:
             # Always save to temp directory initially
-            filename = self.get_image_filename(temp=True)
+            filename = self.get_image_filename()
             
             # Build command with parameters
             cmd = [
