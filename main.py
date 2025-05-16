@@ -164,7 +164,6 @@ def main():
         logger.info(f"BASE_DIR: {BASE_DIR}")
         logger.info(f"IMAGES_DIR: {IMAGES_DIR}")
         logger.info(f"TEMP_DIR: {TEMP_DIR}")
-        logger.info(f"CURRENT_DIR: {CURRENT_DIR}")
         logger.info(f"ARCHIVE_DIR: {ARCHIVE_DIR}")
         logger.info(f"LOGS_DIR: {LOGS_DIR}")
         
