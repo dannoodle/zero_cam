@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 class DropboxSync:
     """Handles file transfer with Dropbox using rclone."""
     
-    def __init__(self, config, temp_dir, logs_dir):
+    def __init__(self, config, temp_dir, archive_dir, logs_dir):
         """Initialize with configuration settings."""
         self.config = config['sync']
         self.temp_dir = temp_dir
+        self.archive_dir = archive_dir
         self.logs_dir = logs_dir
         
         self.remote_name = self.config.get('remote_name', 'dropbox')
@@ -121,8 +122,7 @@ class DropboxSync:
             
             # Now move all files from temp to archive directory
             # Use parent of current_dir to get the images dir
-            images_dir = os.path.dirname(self.current_dir)
-            archive_dir = os.path.join(images_dir, "archive")
+            archive_dir = self.archive_dir
             
             # Create dated directory in archive
             today = datetime.now().strftime("%Y-%m-%d")
@@ -183,7 +183,7 @@ class DropboxSync:
                 
             # Use today's date for the archive folder
             today = datetime.now().strftime("%Y-%m-%d")
-            archive_dir = os.path.join(os.path.dirname(self.current_dir), "archive", today)
+            archive_dir = os.path.join(self.archive_dir, today)
             os.makedirs(archive_dir, exist_ok=True)
             
             logger.info(f"Moving files from temp directory to archive: {archive_dir}")

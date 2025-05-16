@@ -70,7 +70,7 @@ class FileManager:
         cutoff_str = cutoff_date.strftime("%Y-%m-%d")
         
         # Get all date directories
-        date_dirs = self.get_date_dirs(self.current_dir)
+        date_dirs = self.get_date_dirs(self.archive_dir)
         
         # Filter for directories older than the cutoff
         archived_count = 0
@@ -187,7 +187,7 @@ class FileManager:
         """Check available disk space and initiate cleanup if needed."""
         try:
             # Get disk usage statistics
-            stat = shutil.disk_usage(self.current_dir)
+            stat = shutil.disk_usage(self.archive_dir)
             free_mb = stat.free / (1024 * 1024)
             
             logger.debug(f"Disk space: {free_mb:.1f}MB free")
@@ -200,7 +200,7 @@ class FileManager:
                 self.cleanup_old_archives()
                 
                 # Check if we've recovered enough space
-                stat = shutil.disk_usage(self.current_dir)
+                stat = shutil.disk_usage(self.archive_dir)
                 free_mb = stat.free / (1024 * 1024)
                 
                 if free_mb < self.min_free_space_mb:
