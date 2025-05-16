@@ -15,10 +15,9 @@ logger = logging.getLogger(__name__)
 class DropboxSync:
     """Handles file transfer with Dropbox using rclone."""
     
-    def __init__(self, config, current_dir, temp_dir, logs_dir):
+    def __init__(self, config, temp_dir, logs_dir):
         """Initialize with configuration settings."""
         self.config = config['sync']
-        self.current_dir = current_dir
         self.temp_dir = temp_dir
         self.logs_dir = logs_dir
         
@@ -80,19 +79,16 @@ class DropboxSync:
     
     def sync_temp_and_move(self):
         """
-        Sync only the temporary directory to Dropbox and 
-        then move files to the archive directory.
+        Sync temporary directory to Dropbox and 
+        then move files to properly dated archive directories.
         """
         try:
-            # Log paths
-            logger.info(f"Using temp directory: {self.temp_dir}")
-            
             # Skip if the temp directory is empty
             if not os.path.exists(self.temp_dir) or not os.listdir(self.temp_dir):
                 logger.info("No images in temp directory to sync")
                 return True
                     
-            # Sync the temp directory to Dropbox - NO "/latest" SUFFIX
+            # Sync the temp directory to Dropbox
             remote_path = f"{self.remote_name}:{self.remote_path}"
             logger.info(f"Transferring new images from temp to {remote_path}")
             
@@ -130,9 +126,10 @@ class DropboxSync:
             
             # Create dated directory in archive
             today = datetime.now().strftime("%Y-%m-%d")
-            dated_archive_dir = os.path.join(archive_dir, today)
+            dated_archive_dir = os.path.join(self.archive_dir, today)
             os.makedirs(dated_archive_dir, exist_ok=True)
             
+            # Move files from temp to dated archive directory
             logger.info(f"Moving files from {self.temp_dir} to {dated_archive_dir}")
             
             move_count = 0

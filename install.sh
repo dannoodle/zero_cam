@@ -52,8 +52,7 @@ mkdir -p $PROJECT_DIR
 # Create directory structure
 echo "Creating directory structure..."
 mkdir -p "$PROJECT_DIR/logs"
-mkdir -p "$PROJECT_DIR/images/current"
-mkdir -p "$PROJECT_DIR/images/temp"  # New temp directory
+mkdir -p "$PROJECT_DIR/images/temp"
 mkdir -p "$PROJECT_DIR/images/archive"
 
 # Copy Python files

@@ -27,7 +27,6 @@ running = True
 # Base directories
 BASE_DIR = Path(__file__).parent
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
-CURRENT_DIR = os.path.join(IMAGES_DIR, "current")
 TEMP_DIR = os.path.join(IMAGES_DIR, "temp")  # New temp directory
 ARCHIVE_DIR = os.path.join(IMAGES_DIR, "archive")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
@@ -170,7 +169,7 @@ def main():
         logger.info(f"LOGS_DIR: {LOGS_DIR}")
         
         # Ensure all directories exist
-        for directory in [CURRENT_DIR, TEMP_DIR, ARCHIVE_DIR, LOGS_DIR]:
+        for directory in [TEMP_DIR, ARCHIVE_DIR, LOGS_DIR]:
             logger.info(f"Ensuring directory exists: {directory}")
             os.makedirs(directory, exist_ok=True)
             
@@ -181,9 +180,9 @@ def main():
         # Initialize components
         logger.info("Initialising system components...")
         
-        camera = Camera(config, CURRENT_DIR, TEMP_DIR)
-        sync = DropboxSync(config, CURRENT_DIR, TEMP_DIR, LOGS_DIR)
-        file_manager = FileManager(config, CURRENT_DIR, ARCHIVE_DIR, LOGS_DIR)
+        camera = Camera(config, TEMP_DIR)
+        sync = DropboxSync(config, TEMP_DIR, LOGS_DIR)
+        file_manager = FileManager(config, ARCHIVE_DIR, LOGS_DIR)
         
         # Check camera connection
         if not camera.check_camera():

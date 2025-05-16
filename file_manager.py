@@ -14,29 +14,27 @@ logger = logging.getLogger(__name__)
 class FileManager:
     """Handles file operations, directory structure, archiving and cleanup."""
     
-    def __init__(self, config, current_dir, archive_dir, logs_dir):
+    def __init__(self, config, archive_dir, logs_dir):
         """Initialize with configuration settings."""
         self.config = config['file_management']
-        self.current_dir = current_dir
         self.archive_dir = archive_dir
         self.logs_dir = logs_dir
         
-        self.days_before_archive = self.config.get('days_before_archive', 2)
         self.archive_retention_days = self.config.get('archive_retention_days', 10)
         self.log_retention_days = self.config.get('log_retention_days', 7)
         self.min_free_space_mb = self.config.get('min_free_space_mb', 500)
         
         # Ensure directories exist
-        for directory in [current_dir, archive_dir, logs_dir]:
+        for directory in [archive_dir, logs_dir]:
             os.makedirs(directory, exist_ok=True)
             
         # Create today's directory
         self.ensure_today_dir()
-    
+
     def ensure_today_dir(self):
-        """Ensure today's directory exists."""
+        """Ensure today's directory exists in the archive."""
         today = datetime.now().strftime("%Y-%m-%d")
-        today_dir = os.path.join(self.current_dir, today)
+        today_dir = os.path.join(self.archive_dir, today)
         os.makedirs(today_dir, exist_ok=True)
         return today_dir
     
@@ -222,9 +220,6 @@ class FileManager:
         logger.info("Running daily file maintenance")
         
         try:
-            # Archive old directories
-            self.archive_old_directories()
-            
             # Clean up old archives
             self.cleanup_old_archives()
             

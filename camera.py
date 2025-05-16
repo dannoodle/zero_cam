@@ -15,30 +15,23 @@ logger = logging.getLogger(__name__)
 class Camera:
     """Simple camera controller for capturing images."""
     
-    def __init__(self, config, current_dir, temp_dir):
+    def __init__(self, config, temp_dir):
         """Initialize camera with configuration settings."""
         self.config = config['camera']
-        self.current_dir = current_dir
         self.temp_dir = temp_dir
         self.capture_count = 0
         self.captures_before_sync = self.config.get('captures', 3)
         
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
-    
-    def get_image_filename(self, temp=True):
+
+    def get_image_filename(self):
         """Generate a timestamped filename for an image."""
         now = datetime.now()
         timestamp = now.strftime("%Y%m%d_%H%M%S")
         
-        if temp:
-            # Save to temp directory
-            return os.path.join(self.temp_dir, f"img_{timestamp}.jpg")
-        else:
-            # Save to daily directory
-            date_dir = os.path.join(self.current_dir, now.strftime("%Y-%m-%d"))
-            os.makedirs(date_dir, exist_ok=True)
-            return os.path.join(date_dir, f"img_{timestamp}.jpg")
+        # Save to temp directory
+        return os.path.join(self.temp_dir, f"img_{timestamp}.jpg")
     
     def capture_image(self):
         """Capture a single image using rpicam-still."""
