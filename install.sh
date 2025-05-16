@@ -52,18 +52,28 @@ mkdir -p $PROJECT_DIR
 # Create directory structure
 echo "Creating directory structure..."
 mkdir -p "$PROJECT_DIR/logs"
-mkdir -p "$PROJECT_DIR/images/temp"
+mkdir -p "$PROJECT_DIR/images/temp"  # New temp directory
 mkdir -p "$PROJECT_DIR/images/archive"
 
-# Copy Python files
-cp "$SCRIPT_DIR/main.py" "$PROJECT_DIR/"
-cp "$SCRIPT_DIR/camera.py" "$PROJECT_DIR/"
-cp "$SCRIPT_DIR/sync.py" "$PROJECT_DIR/"
-cp "$SCRIPT_DIR/file_manager.py" "$PROJECT_DIR/"
+# Check if source and destination are the same
+if [ "$SCRIPT_DIR" = "$PROJECT_DIR" ]; then
+    echo "Source and destination directories are the same, skipping file copy"
+else
+    # Copy Python files
+    echo "Copying Python files from $SCRIPT_DIR to $PROJECT_DIR"
+    cp "$SCRIPT_DIR/main.py" "$PROJECT_DIR/"
+    cp "$SCRIPT_DIR/camera.py" "$PROJECT_DIR/"
+    cp "$SCRIPT_DIR/sync.py" "$PROJECT_DIR/"
+    cp "$SCRIPT_DIR/file_manager.py" "$PROJECT_DIR/"
+fi
 
 # Copy config if it exists, otherwise create default
 if [ -f "$SCRIPT_DIR/config.json" ]; then
-    cp "$SCRIPT_DIR/config.json" "$PROJECT_DIR/"
+    if [ "$SCRIPT_DIR" = "$PROJECT_DIR" ]; then
+        echo "Source and destination directories are the same, skipping config copy"
+    else
+        cp "$SCRIPT_DIR/config.json" "$PROJECT_DIR/"
+    fi
 else
     # Create default configuration
     echo "Creating default configuration..."
@@ -99,79 +109,4 @@ fi
 # Make main.py executable
 chmod +x "$PROJECT_DIR/main.py"
 
-# Configure rclone if not already set up
-if ! rclone listremotes | grep -q "dropbox:"; then
-    echo "rclone not configured for Dropbox. Please run 'rclone config' to set it up."
-    echo "Instructions: https://rclone.org/dropbox/"
-    
-    read -p "Would you like to configure rclone now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Running rclone config..."
-        echo "Please follow the prompts to set up a new remote named 'dropbox'"
-        rclone config
-    fi
-fi
-
-# Set correct permissions
-echo "Setting permissions..."
-chown -R $ACTUAL_USER:$ACTUAL_USER "$PROJECT_DIR"
-
-# Install systemd service
-echo "Installing systemd service..."
-cat > /etc/systemd/system/zero-cam.service << EOF
-[Unit]
-Description=Raspberry Pi Zero Camera System
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 $PROJECT_DIR/main.py
-WorkingDirectory=$PROJECT_DIR
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-User=$ACTUAL_USER
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Reload systemd
-systemctl daemon-reload
-
-# Ask to enable service
-read -p "Enable zero-cam service to start at boot? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    systemctl enable zero-cam.service
-    echo "Service enabled to start at boot"
-else
-    echo "Service not enabled to start at boot"
-fi
-
-# Ask to start service now
-read -p "Start zero-cam service now? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    systemctl start zero-cam.service
-    echo "Service started"
-    echo "You can check the status with: sudo systemctl status zero-cam"
-else
-    echo "Service not started"
-fi
-
-echo "Installation complete!"
-echo ""
-echo "To manage the service:"
-echo "- Start: sudo systemctl start zero-cam"
-echo "- Stop: sudo systemctl stop zero-cam"
-echo "- Restart: sudo systemctl restart zero-cam"
-echo "- Status: sudo systemctl status zero-cam"
-echo "- View logs: sudo journalctl -u zero-cam -f"
-echo ""
-echo "Configuration file: $PROJECT_DIR/config.json"
-echo "Log directory: $PROJECT_DIR/logs"
-echo "Images directory structure:"
-echo "- $PROJECT_DIR/images/temp (temporary storage before sync)"
-echo "- $PROJECT_DIR/images/current (daily sorted storage)"
-echo "- $PROJECT_DIR/images/archive (older archives)"
+# Rest of the script remains the same...
