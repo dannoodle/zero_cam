@@ -26,7 +26,7 @@ apt-get install -y python3 python3-pip python3-picamera2 rclone
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip3 install psutil python-dotenv
+pip3 install --break-system-packages psutil python-dotenv
 
 # Create project directory
 echo "Creating project directory..."
@@ -65,6 +65,7 @@ else
   "sync": {
     "remote_name": "dropbox",
     "remote_path": "pi_cam",
+    "operation_mode": "copy",
     "sync_logs": true,
     "sync_on_shutdown": true
   },
