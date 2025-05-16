@@ -114,12 +114,22 @@ class DropboxSync:
             # Determine remote path based on directory type
             if local_dir.startswith(self.current_dir):
                 # For current images
-                rel_path = os.path.relpath(local_dir, self.current_dir)
-                remote_dir = f"{self.remote_name}:{self.remote_path}/{rel_path}"
+                if local_dir == self.current_dir:
+                    # Root current directory
+                    remote_dir = f"{self.remote_name}:{self.remote_path}"
+                else:
+                    # Dated subdirectory
+                    rel_path = os.path.relpath(local_dir, self.current_dir)
+                    remote_dir = f"{self.remote_name}:{self.remote_path}/{rel_path}"
             elif local_dir.startswith(self.logs_dir) and self.sync_logs:
                 # For logs
-                rel_path = os.path.relpath(local_dir, self.logs_dir)
-                remote_dir = f"{self.remote_name}:{self.remote_path}/logs/{rel_path}"
+                if local_dir == self.logs_dir:
+                    # Root logs directory 
+                    remote_dir = f"{self.remote_name}:{self.remote_path}/logs"
+                else:
+                    # Subdirectory within logs
+                    rel_path = os.path.relpath(local_dir, self.logs_dir)
+                    remote_dir = f"{self.remote_name}:{self.remote_path}/logs/{rel_path}"
             else:
                 # Skip if not a recognized directory
                 logger.info(f"Skipping unrecognized directory: {local_dir}")
@@ -184,7 +194,7 @@ class DropboxSync:
                         if file.startswith('.pi_cam_sync_placeholder'):
                             continue  # Skip placeholder files
                         local_path = os.path.join(rel_root, file)
-                        local_files.add(local_path)
+                        local_files.add(local_path.replace('\\', '/'))  # Normalize path separators
                 
                 # Step 3: List all files in remote directory
                 remote_files = set()
@@ -209,66 +219,79 @@ class DropboxSync:
                 # Step 5: Upload new/changed files to remote
                 if need_to_upload:
                     logger.info(f"Uploading {len(need_to_upload)} files to remote")
-                    for file in need_to_upload:
-                        src = os.path.join(local_dir, file)
-                        dst = f"{remote_dir}/{file}"
-                        logger.debug(f"Uploading: {src} -> {dst}")
-                        result = subprocess.run(
-                            ["rclone", "copy", src, os.path.dirname(dst)],
-                            capture_output=True,
-                            text=True,
-                            timeout=60
-                        )
-                        if result.returncode != 0:
-                            logger.error(f"Failed to upload {file}: {result.stderr}")
+                    
+                    # Use a single copy command for all files
+                    result = subprocess.run(
+                        ["rclone", "copy", local_dir, remote_dir, "--progress"],
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+                    
+                    if result.returncode != 0:
+                        logger.error(f"Failed to upload files: {result.stderr}")
+                    else:
+                        logger.info(f"Successfully uploaded {len(need_to_upload)} files")
                 
                 # Step 6: Download new/changed files from remote
                 if need_to_download:
                     logger.info(f"Downloading {len(need_to_download)} files from remote")
-                    for file in need_to_download:
-                        src = f"{remote_dir}/{file}"
-                        dst = os.path.join(local_dir, file)
-                        # Ensure the parent directory exists
-                        os.makedirs(os.path.dirname(dst), exist_ok=True)
-                        logger.debug(f"Downloading: {src} -> {dst}")
-                        result = subprocess.run(
-                            ["rclone", "copy", src, os.path.dirname(dst)],
-                            capture_output=True,
-                            text=True,
-                            timeout=60
-                        )
-                        if result.returncode != 0:
-                            logger.error(f"Failed to download {file}: {result.stderr}")
+                    
+                    # Use a single copy command for all files
+                    result = subprocess.run(
+                        ["rclone", "copy", remote_dir, local_dir, "--progress"],
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+                    
+                    if result.returncode != 0:
+                        logger.error(f"Failed to download files: {result.stderr}")
+                    else:
+                        logger.info(f"Successfully downloaded {len(need_to_download)} files")
                 
-                # Step 7: Delete files on remote that don't exist locally
-                if need_to_download:
-                    # Only delete if we know remote files
-                    deleted_count = 0
-                    for file in need_to_download:
-                        # Don't delete placeholder files
-                        if '.pi_cam_sync_placeholder' in file:
-                            continue
+                # Step 7: Delete files on remote that don't exist locally (only if files were actually downloaded)
+                if need_to_download and remote_files:
+                    # Refresh local file list after downloads
+                    new_local_files = set()
+                    for root, _, files in os.walk(local_dir):
+                        rel_root = os.path.relpath(root, local_dir)
+                        if rel_root == '.':
+                            rel_root = ''
+                        for file in files:
+                            if file.startswith('.pi_cam_sync_placeholder'):
+                                continue  # Skip placeholder files
+                            local_path = os.path.join(rel_root, file)
+                            new_local_files.add(local_path.replace('\\', '/'))  # Normalize path separators
+                    
+                    # Files that exist remotely but not locally after download
+                    to_delete_remotely = remote_files - new_local_files
+                    
+                    # Use a filter file for deletion
+                    if to_delete_remotely:
+                        logger.info(f"Deleting {len(to_delete_remotely)} files from remote that don't exist locally")
+                        try:
+                            # Create a filter file listing files to delete
+                            filter_file = os.path.join(temp_dir, "delete_filter.txt")
+                            with open(filter_file, 'w') as f:
+                                for file in to_delete_remotely:
+                                    f.write(f"- {file}\n")
                             
-                        local_file = os.path.join(local_dir, file)
-                        remote_file = f"{remote_dir}/{file}"
-                        
-                        # Check if local file exists now (after download)
-                        if not os.path.exists(local_file):
-                            # File was deleted locally, delete from remote
-                            logger.debug(f"Deleting from remote: {remote_file}")
+                            # Use deletefiles command with filter file
                             result = subprocess.run(
-                                ["rclone", "delete", remote_file],
+                                ["rclone", "deletefiles", remote_dir, "--files-from", filter_file],
                                 capture_output=True,
                                 text=True,
-                                timeout=30
+                                timeout=120
                             )
-                            if result.returncode == 0:
-                                deleted_count += 1
+                            
+                            if result.returncode != 0:
+                                logger.error(f"Failed to delete remote files: {result.stderr}")
                             else:
-                                logger.error(f"Failed to delete {file} from remote: {result.stderr}")
-                    
-                    if deleted_count > 0:
-                        logger.info(f"Deleted {deleted_count} files from remote")
+                                logger.info(f"Successfully deleted files from remote")
+                            
+                        except Exception as e:
+                            logger.error(f"Error creating filter file for deletion: {str(e)}")
                 
                 logger.info(f"Bidirectional sync completed: {len(need_to_upload)} uploaded, {len(need_to_download)} downloaded")
                 return True

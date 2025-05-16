@@ -11,7 +11,7 @@
   },
   "sync": {
     "remote_name": "dropbox",
-    "remote_path": "pi_cam",
+    "remote_path": "mum_cam_1",
     "sync_logs": true,
     "sync_on_shutdown": true,
     "bidirectional": true
