@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Dropbox synchronisation module for Raspberry Pi Zero Camera System.
 Handles file transfer between local system and Dropbox using rclone.
@@ -7,21 +8,22 @@ import os
 import subprocess
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
-
-from config.settings import config, CURRENT_DIR, LOGS_DIR
 
 logger = logging.getLogger(__name__)
 
 class DropboxSync:
     """Handles file transfer with Dropbox using rclone."""
     
-    def __init__(self):
+    def __init__(self, config, current_dir, logs_dir):
         """Initialize with configuration settings."""
-        self.remote_name = config.get('sync', 'remote_name', 'dropbox')
-        self.remote_path = config.get('sync', 'remote_path', 'pi_cam')
-        self.sync_logs = config.get('sync', 'sync_logs', True)
-        self.operation_mode = config.get('sync', 'operation_mode', 'copy')  # Default to 'copy' instead of 'sync'
+        self.config = config['sync']
+        self.current_dir = current_dir
+        self.logs_dir = logs_dir
+        
+        self.remote_name = self.config.get('remote_name', 'dropbox')
+        self.remote_path = self.config.get('remote_path', 'pi_cam')
+        self.sync_logs = self.config.get('sync_logs', True)
+        self.operation_mode = self.config.get('operation_mode', 'copy')
         
         # Validate operation mode
         if self.operation_mode not in ['copy', 'sync']:
@@ -31,12 +33,8 @@ class DropboxSync:
         # Check if rclone is configured
         self._check_rclone_config()
     
-    def _check_rclone_config(self) -> bool:
-        """Verify that rclone is properly configured with the remote.
-        
-        Returns:
-            bool: True if configuration is valid, False otherwise
-        """
+    def _check_rclone_config(self):
+        """Verify that rclone is properly configured with the remote."""
         try:
             # Check if rclone is installed
             result = subprocess.run(
@@ -82,23 +80,16 @@ class DropboxSync:
             logger.error(f"Error checking rclone configuration: {str(e)}")
             return False
     
-    def _get_remote_path(self, local_path: str) -> str:
-        """Generate the appropriate remote path for a local directory.
-        
-        Args:
-            local_path: Local directory path
-            
-        Returns:
-            str: Remote path
-        """
-        if local_path.startswith(CURRENT_DIR):
+    def _get_remote_path(self, local_path):
+        """Generate the appropriate remote path for a local directory."""
+        if local_path.startswith(self.current_dir):
             # For current images, preserve directory structure
-            rel_path = os.path.relpath(local_path, os.path.dirname(CURRENT_DIR))
+            rel_path = os.path.relpath(local_path, os.path.dirname(self.current_dir))
             return f"{self.remote_name}:{self.remote_path}/{rel_path}"
         
-        elif local_path.startswith(LOGS_DIR) and self.sync_logs:
+        elif local_path.startswith(self.logs_dir) and self.sync_logs:
             # For logs, use a logs subfolder
-            rel_path = os.path.relpath(local_path, os.path.dirname(LOGS_DIR))
+            rel_path = os.path.relpath(local_path, os.path.dirname(self.logs_dir))
             return f"{self.remote_name}:{self.remote_path}/{rel_path}"
         
         else:
@@ -106,15 +97,8 @@ class DropboxSync:
             rel_path = os.path.basename(local_path)
             return f"{self.remote_name}:{self.remote_path}/{rel_path}"
     
-    def transfer_directory(self, local_dir: str) -> bool:
-        """Transfer a local directory to Dropbox using the configured operation mode.
-        
-        Args:
-            local_dir: Local directory to transfer
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def sync_directory(self, local_dir):
+        """Transfer a local directory to Dropbox using the configured operation mode."""
         try:
             # Skip transfer for non-existent directories
             if not os.path.exists(local_dir):
@@ -160,45 +144,41 @@ class DropboxSync:
             logger.error(f"Error transferring to Dropbox: {str(e)}")
             return False
     
-    def transfer_today(self) -> bool:
-        """Transfer the current day's directory to Dropbox.
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def sync_daily_directory(self):
+        """Transfer the current day's directory to Dropbox."""
         today = datetime.now().strftime("%Y-%m-%d")
-        daily_dir = os.path.join(CURRENT_DIR, today)
+        daily_dir = os.path.join(self.current_dir, today)
         
         if os.path.exists(daily_dir):
-            return self.transfer_directory(daily_dir)
+            result = self.sync_directory(daily_dir)
+            
+            # Also sync logs if configured
+            if result and self.sync_logs:
+                self.sync_logs_directory()
+                
+            return result
         else:
             logger.warning(f"Today's directory does not exist: {daily_dir}")
             return False
     
-    def transfer_all_current(self) -> bool:
-        """Transfer all current images to Dropbox.
+    def sync_all_current(self):
+        """Transfer all current images to Dropbox."""
+        result = self.sync_directory(self.current_dir)
         
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return self.transfer_directory(CURRENT_DIR)
+        # Also sync logs if configured
+        if result and self.sync_logs:
+            self.sync_logs_directory()
+            
+        return result
     
-    def transfer_logs(self) -> bool:
-        """Transfer log files to Dropbox if enabled.
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def sync_logs_directory(self):
+        """Transfer log files to Dropbox if enabled."""
         if self.sync_logs:
-            return self.transfer_directory(LOGS_DIR)
+            return self.sync_directory(self.logs_dir)
         return True
     
-    def check_connection(self) -> bool:
-        """Check if the Dropbox connection is working.
-        
-        Returns:
-            bool: True if connection is working, False otherwise
-        """
+    def check_connection(self):
+        """Check if the Dropbox connection is working."""
         try:
             # Try to list the root of the remote to check connection
             result = subprocess.run(
