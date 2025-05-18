@@ -22,9 +22,14 @@ class DropboxSync:
         self.archive_dir = archive_dir
         self.logs_dir = logs_dir
         
+        # Get camera name from config for use as default remote path
+        camera_name = config.get('camera', {}).get('name', 'zero_cam')
+        
         self.remote_name = self.config.get('remote_name', 'dropbox')
-        self.remote_path = self.config.get('remote_path', 'pi_cam')
+        self.remote_path = self.config.get('remote_path', camera_name)
         self.sync_logs = self.config.get('sync_logs', True)
+        
+        logger.info(f"Sync configured: {self.remote_name}:{self.remote_path}")
         
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
