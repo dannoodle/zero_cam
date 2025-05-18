@@ -23,7 +23,7 @@ class DropboxSync:
         self.logs_dir = logs_dir
         
         # Get camera name from config for use as default remote path
-        camera_name = config.get('camera', {}).get('name', 'zero_cam')
+        camera_name = config.get('camera', {}).get('name', 'mum_cam_1')
         
         self.remote_name = self.config.get('remote_name', 'dropbox')
         self.remote_path = self.config.get('remote_path', camera_name)
@@ -203,6 +203,7 @@ class DropboxSync:
                     try:
                         # Handle existing files
                         if os.path.exists(dst_file):
+                            import time
                             file_base, file_ext = os.path.splitext(filename)
                             dst_file = f"{archive_dir}/{file_base}_{int(time.time())}{file_ext}"
                         

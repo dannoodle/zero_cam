@@ -37,9 +37,17 @@ def setup_logging(log_level="INFO"):
         # Ensure logs directory exists
         os.makedirs(LOGS_DIR, exist_ok=True)
         
-        # Generate log filename with date
+        # Get camera name from config if available, otherwise default
+        camera_name = "mum_cam_1"
+        try:
+            if 'camera' in config and 'name' in config['camera']:
+                camera_name = config['camera']['name']
+        except Exception:
+            pass
+        
+        # Generate log filename with date and camera name
         log_date = datetime.now().strftime("%Y-%m-%d")
-        log_file = os.path.join(LOGS_DIR, f"pi_cam_{log_date}.log")
+        log_file = os.path.join(LOGS_DIR, f"{camera_name}_{log_date}.log")
         
         # Get log level
         log_level_value = getattr(logging, log_level.upper(), logging.INFO)

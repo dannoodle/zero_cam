@@ -3,8 +3,8 @@
     "name": "zero_cam_1",
     "interval": 20,
     "captures": 3,
-    "hflip": false,
-    "vflip": false,
+    "hflip": true,
+    "vflip": true,
     "rotation": 0,
     "quality": 35,
     "width": 2592,
@@ -12,7 +12,7 @@
   },
   "sync": {
     "remote_name": "dropbox",
-    "remote_path": "home_cam_wide",
+    "remote_path": "zero_cam_1",
     "operation_mode": "copy",
     "sync_logs": true,
     "sync_on_shutdown": true
@@ -23,12 +23,5 @@
     "log_retention_days": 7,
     "min_free_space_mb": 500
   },
-  "log_level": "INFO",
-  "system": {
-    "installation_path": "/home/pi/zero_cam",
-    "user": "pi",
-    "camera_name": "zero_cam_1",
-    "version": "1.0.0",
-    "installation_date": "2025-05-18"
-  }
+  "log_level": "INFO"
 }
