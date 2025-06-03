@@ -289,6 +289,46 @@ configure_file_management() {
 EOF
 }
 
+# Function to configure safe mode settings
+configure_safe_mode() {
+    # Default values - if upgrading, read from existing config
+    if [ "$UPGRADE_MODE" = true ] && [ -f "$PROJECT_DIR/config.json" ]; then
+        SAFE_ENABLED=$(grep -o '"enabled": [a-z]*' "$PROJECT_DIR/config.json" | awk '{print $2}' || echo "true")
+        SAFE_DELAY=$(grep -o '"delay_seconds": [0-9]*' "$PROJECT_DIR/config.json" | awk '{print $2}' || echo "180")
+        SAFE_MESSAGE=$(grep -o '"message": "[^"]*"' "$PROJECT_DIR/config.json" | cut -d'"' -f4 || echo "Safe mode: Waiting for potential remote intervention...")
+    else
+        SAFE_ENABLED=true
+        SAFE_DELAY=180
+        SAFE_MESSAGE="Safe mode: Waiting for potential remote intervention..."
+    fi
+
+    # Ask for safe mode settings
+    echo "Safe Mode Configuration:"
+    echo "----------------------"
+    echo "Safe mode provides a startup delay for recovery purposes."
+    echo "This gives you time to connect remotely and stop the service if needed."
+    
+    read -p "Enable safe mode (true/false) [$SAFE_ENABLED]: " NEW_SAFE_ENABLED
+    SAFE_ENABLED=${NEW_SAFE_ENABLED:-$SAFE_ENABLED}
+    
+    if [[ $SAFE_ENABLED =~ ^[Tt]rue$ ]]; then
+        read -p "Delay in seconds [$SAFE_DELAY]: " NEW_SAFE_DELAY
+        SAFE_DELAY=${NEW_SAFE_DELAY:-$SAFE_DELAY}
+        
+        read -p "Custom message (press ENTER for default): " NEW_SAFE_MESSAGE
+        SAFE_MESSAGE=${NEW_SAFE_MESSAGE:-$SAFE_MESSAGE}
+    fi
+    
+    # Return the safe mode config as JSON
+    cat << EOF
+  "safe_mode": {
+    "enabled": $SAFE_ENABLED,
+    "delay_seconds": $SAFE_DELAY,
+    "message": "$SAFE_MESSAGE"
+  }
+EOF
+}
+
 # Function to configure logging settings
 configure_logging() {
     # Default values - if upgrading, read from existing config
@@ -344,6 +384,17 @@ if [[ $CONFIG_MODE =~ ^[Ss]$ ]]; then
     read -p "Days to keep images before deletion [10]: " SIMPLE_RETENTION
     SIMPLE_RETENTION=${SIMPLE_RETENTION:-10}
     
+    echo "Safe mode provides a startup delay for recovery purposes."
+    read -p "Enable safe mode (recommended for new installations)? (y/n) [y]: " -n 1 -r SIMPLE_SAFE_MODE
+    echo
+    if [[ $SIMPLE_SAFE_MODE =~ ^[Nn]$ ]]; then
+        SIMPLE_SAFE_ENABLED=false
+        SIMPLE_SAFE_DELAY=0
+    else
+        SIMPLE_SAFE_ENABLED=true
+        SIMPLE_SAFE_DELAY=180
+    fi
+    
     # Create simple config
     cat > "$PROJECT_DIR/config.json" << EOF
 {
@@ -371,6 +422,11 @@ if [[ $CONFIG_MODE =~ ^[Ss]$ ]]; then
     "log_retention_days": 7,
     "min_free_space_mb": 500
   },
+  "safe_mode": {
+    "enabled": $SIMPLE_SAFE_ENABLED,
+    "delay_seconds": $SIMPLE_SAFE_DELAY,
+    "message": "Safe mode: Waiting for potential remote intervention..."
+  },
   "log_level": "INFO",
   "system": {
     "installation_path": "$PROJECT_DIR",
@@ -385,6 +441,7 @@ else
     CAMERA_CONFIG=$(configure_camera)
     SYNC_CONFIG=$(configure_sync)
     FILE_CONFIG=$(configure_file_management)
+    SAFE_MODE_CONFIG=$(configure_safe_mode)
     LOG_CONFIG=$(configure_logging)
     
     # Create configuration file
@@ -393,6 +450,7 @@ else
 $CAMERA_CONFIG,
 $SYNC_CONFIG,
 $FILE_CONFIG,
+$SAFE_MODE_CONFIG,
 $LOG_CONFIG,
   "system": {
     "installation_path": "$PROJECT_DIR",
@@ -420,7 +478,7 @@ if ! rclone listremotes | grep -q "dropbox:"; then
         echo "2. Enter 'dropbox' (or your preferred name) for the name"
         echo "3. Select the number for 'Dropbox' as the storage type"
         echo "4. Accept defaults for most options"
-        echo "5. Select 'y' to use auto config, then authorize in your browser"
+        echo "5. Select 'y' to use auto config, then authorise in your browser"
         echo "===============================\n"
         
         read -p "Press ENTER to continue to rclone config..."
@@ -478,6 +536,32 @@ manual_sync() {
     python3 -c "import sys; sys.path.append('$PROJECT_DIR'); from sync import DropboxSync; import json; config = json.load(open('$CONFIG_FILE')); sync = DropboxSync(config, '$PROJECT_DIR/images/temp', '$PROJECT_DIR/images/archive', '$PROJECT_DIR/logs'); sync.sync_temp_and_move(); sync.sync_logs_directory()"
 }
 
+toggle_safe_mode() {
+    echo "Current safe mode configuration:"
+    grep -A 4 '"safe_mode"' \$CONFIG_FILE
+    echo
+    read -p "Enable (e) or disable (d) safe mode? " -n 1 -r
+    echo
+    if [[ \$REPLY =~ ^[Ee]$ ]]; then
+        # Enable safe mode
+        sed -i 's/"enabled": false/"enabled": true/' \$CONFIG_FILE
+        echo "Safe mode enabled"
+    elif [[ \$REPLY =~ ^[Dd]$ ]]; then
+        # Disable safe mode
+        sed -i 's/"enabled": true/"enabled": false/' \$CONFIG_FILE
+        echo "Safe mode disabled"
+    else
+        echo "No changes made"
+        return
+    fi
+    
+    read -p "Would you like to restart the service to apply changes? (y/n) " -n 1 -r
+    echo
+    if [[ \$REPLY =~ ^[Yy]$ ]]; then
+        restart_service
+    fi
+}
+
 # Menu
 clear
 echo "Zero Cam Management"
@@ -488,6 +572,7 @@ echo "3. Restart service"
 echo "4. Edit configuration"
 echo "5. Take manual capture"
 echo "6. Perform manual sync"
+echo "7. Toggle safe mode"
 echo "0. Exit"
 echo
 
@@ -500,6 +585,7 @@ case \$OPTION in
     4) edit_config ;;
     5) manual_capture ;;
     6) manual_sync ;;
+    7) toggle_safe_mode ;;
     0) exit 0 ;;
     *) echo "Invalid option" ;;
 esac
@@ -564,6 +650,12 @@ echo "================================================================="
 echo "Installation complete!"
 echo "================================================================="
 echo ""
+echo "SAFE MODE INFORMATION:"
+echo "- Safe mode is now configured in your system"
+echo "- When enabled, the service waits 3 minutes before starting"
+echo "- This gives you time to connect remotely if there are issues"
+echo "- Use ~/zero_cam-manage option 7 to toggle safe mode on/off"
+echo ""
 echo "QUICK MANAGEMENT:"
 echo "- Run ~/zero_cam-manage for quick administration"
 echo ""
@@ -581,5 +673,43 @@ echo "- Images directory structure:"
 echo "  - $PROJECT_DIR/images/temp (temporary storage before sync)"
 echo "  - $PROJECT_DIR/images/archive (dated storage of synced images)"
 echo ""
-echo "For help, run the management script: ~/zero_cam-manage"
+echo "RECOVERY INFORMATION:"
+if grep -q '"enabled": true' "$PROJECT_DIR/config.json" 2>/dev/null; then
+    echo "- Safe mode is ENABLED - service will wait 3 minutes on startup"
+    echo "- During this time you can SSH in and stop the service if needed"
+    echo "- Press Ctrl+C during safe mode countdown to stop immediately"
+else
+    echo "- Safe mode is DISABLED - service starts immediately"
+    echo "- Enable safe mode via ~/zero_cam-manage if needed for recovery"
+fi
+echo ""
+echo "TROUBLESHOOTING:"
+echo "- Check service status: sudo systemctl status zero-cam"
+echo "- View recent logs: sudo journalctl -u zero-cam -n 50"
+echo "- Stop problematic service: sudo systemctl stop zero-cam"
+echo "- Edit config safely: ~/zero_cam-manage (option 4)"
+echo "- Test camera manually: ~/zero_cam-manage (option 5)"
+echo "- Test sync manually: ~/zero_cam-manage (option 6)"
+echo ""
+echo "NETWORK CONFIGURATION:"
+echo "- Configure rclone: rclone config"
+echo "- Test rclone connection: rclone lsf dropbox:"
+echo "- View rclone remotes: rclone listremotes"
+echo ""
+echo "SYSTEM INFORMATION:"
+echo "- Installation user: $ACTUAL_USER"
+echo "- Camera name: $CAMERA_NAME"
+echo "- Installation directory: $PROJECT_DIR"
+echo "- Config backup location: $PROJECT_DIR/config.json.bak.*"
+echo ""
+echo "NEXT STEPS:"
+echo "1. Configure rclone if you haven't already (rclone config)"
+echo "2. Test the camera: ~/zero_cam-manage (option 5)"
+echo "3. Test the sync: ~/zero_cam-manage (option 6)"
+echo "4. Monitor logs: sudo journalctl -u zero-cam -f"
+echo ""
+echo "For detailed help and configuration options, see:"
+echo "- Configuration guide: $PROJECT_DIR/config_guide.md (if available)"
+echo "- Management script: ~/zero_cam-manage"
+echo ""
 echo "================================================================="

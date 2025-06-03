@@ -12,7 +12,7 @@
   },
   "sync": {
     "remote_name": "dropbox",
-    "remote_path": "zero_cam_1",
+    "remote_path": "mum_cam/cam1",
     "operation_mode": "copy",
     "sync_logs": true,
     "sync_on_shutdown": false
@@ -22,6 +22,11 @@
     "archive_retention_days": 10,
     "log_retention_days": 7,
     "min_free_space_mb": 500
+  },
+  "safe_mode": {
+    "enabled": true,
+    "delay_seconds": 180,
+    "message": "Safe mode: Waiting for potential remote intervention..."
   },
   "log_level": "INFO"
 }

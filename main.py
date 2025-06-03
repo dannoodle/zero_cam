@@ -23,6 +23,7 @@ from file_manager import FileManager
 
 # Global variables
 running = True
+safe_mode_interrupted = False
 
 # Base directories
 BASE_DIR = Path(__file__).parent
@@ -38,7 +39,7 @@ def setup_logging(log_level="INFO"):
         os.makedirs(LOGS_DIR, exist_ok=True)
         
         # Get camera name from config if available, otherwise default
-        camera_name = "mum_cam_1"
+        camera_name = "zero_cam"
         try:
             if 'camera' in config and 'name' in config['camera']:
                 camera_name = config['camera']['name']
@@ -106,6 +107,11 @@ def load_config():
             "log_retention_days": 7,
             "min_free_space_mb": 500
         },
+        "safe_mode": {
+            "enabled": True,
+            "delay_seconds": 180,
+            "message": "Safe mode: Waiting for potential remote intervention..."
+        },
         "log_level": "INFO"
     }
     
@@ -138,9 +144,80 @@ def load_config():
 
 def signal_handler(sig, frame):
     """Handle shutdown signals."""
-    global running
+    global running, safe_mode_interrupted
     print(f"Received signal {sig}, shutting down gracefully...")
     running = False
+    safe_mode_interrupted = True
+
+def safe_mode_signal_handler(sig, frame):
+    """Handle signals during safe mode - allows immediate exit."""
+    global safe_mode_interrupted
+    print(f"Safe mode interrupted by signal {sig}")
+    safe_mode_interrupted = True
+
+def safe_mode_delay(config, logger):
+    """
+    Implement safe mode delay with countdown and ability to interrupt.
+    Returns True if the delay completed normally, False if interrupted.
+    """
+    safe_config = config.get('safe_mode', {})
+    
+    # Check if safe mode is enabled
+    if not safe_config.get('enabled', True):
+        logger.info("Safe mode disabled in configuration")
+        return True
+    
+    delay_seconds = safe_config.get('delay_seconds', 180)
+    message = safe_config.get('message', "Safe mode: Waiting for potential remote intervention...")
+    
+    logger.warning("=== SAFE MODE ACTIVATED ===")
+    logger.warning(message)
+    logger.warning(f"System will start normally in {delay_seconds} seconds")
+    logger.warning("Send SIGINT (Ctrl+C) or SIGTERM to exit immediately")
+    logger.warning("===========================")
+    
+    # Also print to console for immediate visibility
+    print("\n" + "="*60)
+    print("           SAFE MODE ACTIVATED")
+    print("="*60)
+    print(f"System starting in {delay_seconds} seconds...")
+    print("Press Ctrl+C to stop the service immediately")
+    print("This gives you time to connect remotely if needed")
+    print("="*60 + "\n")
+    
+    # Set up signal handler for safe mode (allows immediate exit)
+    old_sigint_handler = signal.signal(signal.SIGINT, safe_mode_signal_handler)
+    old_sigterm_handler = signal.signal(signal.SIGTERM, safe_mode_signal_handler)
+    
+    try:
+        # Countdown with regular updates
+        for remaining in range(delay_seconds, 0, -1):
+            if safe_mode_interrupted:
+                logger.info("Safe mode interrupted - exiting immediately")
+                print("Safe mode interrupted - service stopping")
+                return False
+            
+            # Log every 30 seconds and for the last 10 seconds
+            if remaining % 30 == 0 or remaining <= 10:
+                logger.info(f"Safe mode: {remaining} seconds remaining")
+                print(f"Starting in {remaining} seconds... (Ctrl+C to stop)")
+            
+            time.sleep(1)
+        
+        # Restore original signal handlers
+        signal.signal(signal.SIGINT, old_sigint_handler)
+        signal.signal(signal.SIGTERM, old_sigterm_handler)
+        
+        logger.info("Safe mode completed - starting normal operation")
+        print("Safe mode completed - starting camera system\n")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error during safe mode: {str(e)}")
+        # Restore signal handlers even if there was an error
+        signal.signal(signal.SIGINT, old_sigint_handler)
+        signal.signal(signal.SIGTERM, old_sigterm_handler)
+        return False
 
 def check_network_status(test_host="8.8.8.8"):
     """Check network connectivity by pinging Google's DNS."""
@@ -160,7 +237,7 @@ def main():
     """Main application entry point."""
     global running
     
-    # Load configuration
+    # Load configuration first
     config = load_config()
     
     # Set up logging
@@ -168,6 +245,16 @@ def main():
     logger.info("Starting Raspberry Pi Zero Camera System")
     
     try:
+        # Execute safe mode delay if configured
+        if not safe_mode_delay(config, logger):
+            logger.info("Exiting due to safe mode interruption")
+            return 0
+        
+        # If we get here, safe mode completed or was disabled
+        if safe_mode_interrupted:
+            logger.info("Service stopped during safe mode")
+            return 0
+        
         # Log actual paths being used
         logger.info(f"BASE_DIR: {BASE_DIR}")
         logger.info(f"IMAGES_DIR: {IMAGES_DIR}")
@@ -180,7 +267,7 @@ def main():
             logger.info(f"Ensuring directory exists: {directory}")
             os.makedirs(directory, exist_ok=True)
             
-        # Register signal handlers for graceful shutdown
+        # Register signal handlers for graceful shutdown (normal operation)
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         
