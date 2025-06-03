@@ -15,7 +15,7 @@
     "remote_path": "zero_cam_1",
     "operation_mode": "copy",
     "sync_logs": true,
-    "sync_on_shutdown": true
+    "sync_on_shutdown": false
   },
   "file_management": {
     "days_before_archive": 2,
